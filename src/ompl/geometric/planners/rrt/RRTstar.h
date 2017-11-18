@@ -140,13 +140,13 @@ namespace ompl
             }
 
             /** \brief Set a different nearest neighbors datastructure */
-            template <template <typename T> class NN>
-            void setNearestNeighbors()
+            template <template <typename ...T_> class NN, class ...Args>
+            void setNearestNeighbors(Args&&... args)
             {
                 if (nn_ && nn_->size() != 0)
                     OMPL_WARN("Calling setNearestNeighbors will clear all states.");
                 clear();
-                nn_ = std::make_shared<NN<Motion *>>();
+                nn_ = std::make_shared<NN<Motion *, Args...>>(args...);
                 setup();
             }
 

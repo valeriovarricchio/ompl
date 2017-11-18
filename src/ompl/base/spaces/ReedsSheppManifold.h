@@ -50,26 +50,34 @@ namespace ompl
         class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManifold.h
         {
 
+          using _T::_T; // inherit base ctors
+
+          protected:
+            struct PrivilegedCoordinate;
+
           public:
             typedef typename _T::StateType StateType;
             typedef std::vector<double> TangentVector;
-            typedef std::vector<PrivilegedCoordinate*> coordinates;
-
-            SubRiemannianManifold(const _T& _SS): SS_(_SS){}
+            std::vector<PrivilegedCoordinate*> coordinates;
 
             virtual ~SubRiemannianManifold(){} // TODO check this out
 
-            class Box{
-                Box(const _T& center, double size);
+            struct Box{
+                StateType center;
+                double size;
+                Box(const StateType& center_, double size_):
+                    size(size_)
+                {
+                    _T::copyState(center_, center);
+                }
                 virtual bool intersectsHyperplane(const StateType& conf,
                                       const std::vector<double>& normal) = 0;
             };
 
           protected:
-            _T& SS;
             struct PrivilegedCoordinate{
-                virtual std::string getName(){ return {"unnamed"}; }
-                virtual unsigned int getWeight() = 0;
+                virtual std::string getName() const{ return {"unnamed"}; }
+                virtual unsigned int getWeight() const = 0;
                 virtual TangentVector getTangent(const StateType& center) const = 0;
                 /* see if you need the following ... */
                 /* virtual double inBoxCoefficient(double t) = 0;
@@ -83,76 +91,78 @@ namespace ompl
         {
 
         private:
-            const unsigned int dim_;
-            double R_;
-            LateralCoordinate l_;
-            LongitudinalCoordinate f_;
-            HeadingCoordinate h_;
-
             typedef SubRiemannianManifold<ReedsSheppStateSpace> Base ;
-        public:
-            SubRiemannianManifold(const ReedsSheppStateSpace& _RS):
-                SS(_RS),
-                dim_(SS.getDimension()), // could actually write dim_(3) directly
-                R_(SS.getMinTurningRadius())
-            {
-                coordinates.push_back(&f_);
-                coordinates.push_back(&h_);
-                coordinates.push_back(&l_);
-            }
-
-            class ReedsSheppBox : public Base::Box {
-                ReedsSheppBox(const _T& center, double size);
-                virtual bool intersectsHyperplane(const StateType& center,
-                                      const std::vector<double>& normal) = 0;
-            };
-
             struct LongitudinalCoordinate : public Base::PrivilegedCoordinate{
-                unsigned int getWeight()
+                unsigned int getWeight() const
                 {
                     return 1;
                 }
 
-                std::string getName()
+                std::string getName() const
                 {
                     return {"longitudinal"};
                 }
 
-                TangentVector getTangent(const StateType& center)
+                TangentVector getTangent(const StateType& center) const
                 {
                     return {cos(center.getYaw()), sin(center.getYaw()), 0.0};
                 }
             };
 
             struct HeadingCoordinate : public Base::PrivilegedCoordinate{
-                unsigned int getWeight()
+                unsigned int getWeight() const
                 {
                     return 1;
                 }
-                virtual std::string getName(){
+                virtual std::string getName() const
+                {
                     return {"heading"};
                 }
 
-                TangentVector getTangent(const StateType& center)
+                TangentVector getTangent(const StateType& center) const
                 {
                     return {0.0, 0.0, 1.0};
                 }
             };
 
             struct LateralCoordinate : public Base::PrivilegedCoordinate{
-                unsigned int getWeight()
+                unsigned int getWeight() const
                 {
                     return 2;
                 }
 
-                std::string getName()
+                std::string getName() const
                 {
                     return {"lateral"};
                 }
 
-                TangentVector getTangent(const StateType& center)
+                TangentVector getTangent(const StateType& center) const
                 {
                     return {-sin(center.getYaw()), cos(center.getYaw()), 0.0};
+                }
+            };
+
+            double R_;
+            LateralCoordinate l_;
+            LongitudinalCoordinate f_;
+            HeadingCoordinate h_;
+        public:
+
+            ReedsSheppManifold(double rho_):
+                SubRiemannianManifold(rho_),
+                R_(rho_)
+            {
+                coordinates.push_back(&f_);
+                coordinates.push_back(&h_);
+                coordinates.push_back(&l_);
+            }
+
+
+            class ReedsSheppBox : public Base::Box {
+                bool intersectsHyperplane(const StateType& center,
+                                          const std::vector<double>& normal){
+                    // TODO
+                    return 0;
                 }
             };
         };
