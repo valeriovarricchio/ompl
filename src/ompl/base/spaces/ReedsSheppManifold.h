@@ -40,8 +40,6 @@
 #include "ompl/base/spaces/ReedsSheppStateSpace.h"
 #include <boost/math/constants/constants.hpp>
 
-#include <ompl/util/VecUtils.h>
-
 namespace ompl
 {
     namespace base
@@ -106,11 +104,6 @@ namespace ompl
                 virtual std::string getName() const{ return {"<UntitledCoordinate>"}; }
                 virtual unsigned int getWeight() const = 0;
                 virtual TangentVector getTangent(const StatePtr center) const = 0;
-                /* see if you need the following ... */
-                /* virtual double inBoxCoefficient(double t) = 0;
-                   virtual double outBoxCoefficient(double t) = 0;
-                   virtual double compute(const StateType& center,
-                                          const StateType& target) = 0;*/
             };
 
             void setupManifold(){
@@ -124,10 +117,10 @@ namespace ompl
                   }
                   ci++;
                 }
-                std::cout << "Splitting sequence initialized to: [";
-                for (auto& i:lie_split_idx)
-                  std::cout << i << ", ";
-                std::cout << "\b\b];" << std::endl;
+//                std::cout << "Splitting sequence initialized to: [";
+//                for (auto& i:lie_split_idx)
+//                  std::cout << i << ", ";
+//                std::cout << "\b\b];" << std::endl;
             }
 
         };
@@ -189,18 +182,6 @@ namespace ompl
                 }
             };
 
-            static std::vector<double> stateToVec(const StatePtr x){
-                return {x->as<StateType>()->getX(),
-                        x->as<StateType>()->getY(),
-                        x->as<StateType>()->getYaw()};
-            }
-
-            /*std::vector<double> getInBoxHalfSides(double T) const{
-              double latsize = 4*rho_*(1-cos(T/rho_));
-              double frontsize = T*(sqrt(3/2)-1);
-              return {frontsize, latsize, T/rho_};
-            }*/
-
             LateralCoordinate l_;
             LongitudinalCoordinate f_;
             HeadingCoordinate h_;
@@ -233,10 +214,12 @@ namespace ompl
             class ReedsSheppOuterBox : public Base::OuterBox
             {
               private:
+                typedef std::vector<double> vec;
+
                 const ReedsSheppManifold& M;
                 double rho_;
 
-                std::vector<double> getOutBoxHalfSides(double T) const{
+                vec getOutBoxHalfSides(double T) const{
                   double latsize;
                   if(T<rho_*M_PI/2){
                     latsize = rho_*(1-cos(T/rho_));
@@ -254,36 +237,41 @@ namespace ompl
                 ~ReedsSheppOuterBox() = default;
 
                 bool intersectsHyperplane(const StatePtr state,
-                                      const std::vector<double>& normal) const
+                                          const std::vector<double>& normal) const
                 {
-                    auto center = ReedsSheppManifold::stateToVec(this->center);
-                    auto pivot = ReedsSheppManifold::stateToVec(state);
-                    auto halfsizes = getOutBoxHalfSides(size);
+                    if(std::isinf(size))
+                        return true;
+
+                    vec halfsizes(getOutBoxHalfSides(size));
 
                     if(normal[0]==0 && normal[1]==0)
-                        return fabs(center[2]-pivot[2])<halfsizes[2];
+                        return fabs(center->as<StateType>()->getYaw()
+                                    -state->as<StateType>()->getYaw()) < halfsizes[2];
 
                     BOOST_ASSERT_MSG(normal[2]==0, "Unexpected normal vector for splitting plane");
-                    // get the four points of the rectangle
-                    TangentVector F(M.f_.getTangent(this->center));
-                    ompl::utils::vec_scalar_multiply_inplace(F, halfsizes[0]);
-                    TangentVector L(M.l_.getTangent(this->center));
-                    ompl::utils::vec_scalar_multiply_inplace(L, halfsizes[1]);
 
-                    double last_diff_n = 0;
+                    vec rcenter({center->as<StateType>()->getX()-state->as<StateType>()->getX(),
+                                 center->as<StateType>()->getY()-state->as<StateType>()->getY()});
+
+                    vec f(M.f_.getTangent(this->center));
+                    vec l(M.l_.getTangent(this->center));
+                    vec F({f[0]*halfsizes[0], f[1]*halfsizes[0]});
+                    vec L({l[0]*halfsizes[1], l[1]*halfsizes[1]});
+
+                    double last_dotp = 0;
+                    int a,b;
                     for(int i=0;i<4;i++)
                     {
-                        int a =  2*((i >> 0) & 1)-1;
-                        int b = 2*((i >> 1) & 1)-1;
-                        auto DF = ompl::utils::vec_scalar_multiply(F, a);
-                        auto DL = ompl::utils::vec_scalar_multiply(L, b);
-                        auto vertex = ompl::utils::vec_sum(ompl::utils::vec_sum(center, DF), DL);
-                        double diff_n = ompl::utils::dot_product(ompl::utils::vec_diff(vertex, pivot), normal, 2);
-                        if(last_diff_n*diff_n<0){
-                            return true;
-                        }
+                        a = ((i & 1) << 1)-1;
+                        b = (i & 2)-1;
+                        vec rvertex({rcenter[0]+F[0]*a+L[0]*b,
+                                     rcenter[1]+F[1]*a+L[1]*b});
+                        double dotp = rvertex[0]*normal[0]+rvertex[1]*normal[1];
 
-                        last_diff_n = diff_n;
+                        if(last_dotp*dotp<0)
+                            return true;
+
+                        last_dotp = dotp;
                     }
                     return false;
                 }
@@ -293,6 +281,7 @@ namespace ompl
                 return OuterBoxPtr(new ReedsSheppOuterBox(center, size, *this));
             }
         };
+
     } // end of base namespace
 } // end of ompl namespace
 

@@ -149,10 +149,11 @@ namespace ompl
 
         ~NearestNeighborsSRT() = default; // TODO is this ok?
 
-        virtual void setDistanceFunction(const typename Base::DistanceFunction&)
+        virtual void setDistanceFunction(const typename Base::DistanceFunction& f)
         {
-            OMPL_ERROR("The SRT algorithm assumes the distance function "
-                       "associated to the subriemannian geometry.");
+            OMPL_INFORM("NearestNeighborsSRT: setDistanceFunction() call ignored. "
+                      "The SRT algorithm assumes the distance function associated "
+                      "to the corresponding subriemannian geometry.");
         }
 
         bool reportsSortedResults() const
@@ -178,8 +179,8 @@ namespace ompl
 
         void add(const _MP &data, const NodePtr top){   // TODO should be private
             int side = M.inPositiveHalfspace(data->state,
-                                  top->motion->state,
-                                  top->normal);
+                                             top->motion->state,
+                                             top->normal);
 
             if(top->hasChild(side)){
                 add(data, top->children[side]);
@@ -216,8 +217,8 @@ namespace ompl
             }
 
             int side = M.inPositiveHalfspace(data->state,
-                                  top->motion->state,
-                                  top->normal);
+                                             top->motion->state,
+                                             top->normal);
 
             if(top->hasChild(side))
                 return remove(data, top->children[side]);
@@ -237,14 +238,14 @@ namespace ompl
             BPQ Q;
             Q.setKlim(k);
             query(data, root, Q);
-            transcribeToOut(Q,out);
+            transcribeQueue(Q,out);
         }
 
         void nearestR(const _MP &data, double radius, std::vector<_MP> &out) const{
             BPQ Q;
             Q.setRlim(radius);
             query(data, root, Q);
-            transcribeToOut(Q,out);
+            transcribeQueue(Q,out);
         }
 
         std::size_t size() const{
@@ -285,7 +286,7 @@ namespace ompl
             }
         }
 
-        void transcribeToOut(BPQ Q, std::vector<_MP>& out) const{
+        void transcribeQueue(BPQ Q, std::vector<_MP>& out) const{
             out.clear();
             out.reserve(Q.Q.size());
             for(auto& a:Q.Q)
