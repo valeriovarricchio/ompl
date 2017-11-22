@@ -38,93 +38,13 @@
 #define OMPL_BASE_SPACES_REEDS_SHEPP_MANIFOLD_
 
 #include "ompl/base/spaces/ReedsSheppStateSpace.h"
+#include "ompl/base/spaces/subRiemannianManifold.h"
 #include <boost/math/constants/constants.hpp>
 
 namespace ompl
 {
     namespace base
     {
-        /* _T must be a StateSpace type with a metric defined */
-        // TODO can we concept-check at compile time?
-        template <class _T>
-        class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManifold.h
-        {
-
-          using _T::_T; // inherit base ctors
-
-          protected:
-            struct PrivilegedCoordinate;
-
-          public:
-            typedef typename ompl::base::State* StatePtr;
-            typedef std::vector<double> TangentVector;
-            std::vector<PrivilegedCoordinate*> coordinates;
-
-            virtual ~SubRiemannianManifold(){} // TODO check this out
-
-            virtual bool inPositiveHalfspace(const StatePtr state,
-                                             const StatePtr pivot,
-                                             const TangentVector normal) const = 0;
-
-            virtual TangentVector getSplittingNormal(const StatePtr state,
-                                                     uint depth){
-                checkSetup();
-                return coordinates[lie_split_idx[depth%W_]]->getTangent(state);
-            }
-
-            class OuterBox{
-              protected:
-                double size;
-                StatePtr center;
-              public:
-                OuterBox(const StatePtr center_, double size_):
-                    size(size_), center(center_) // TODO note only copying pointer, relying on its validity!
-                {}
-
-                virtual bool intersectsHyperplane(const StatePtr state,
-                                      const std::vector<double>& normal) const = 0;
-
-                virtual ~OuterBox() = default;
-            };
-
-            typedef std::shared_ptr<OuterBox> OuterBoxPtr;
-
-            virtual OuterBoxPtr getOuterBox(const StatePtr center,
-                                    double size) const = 0;
-          private:
-            uint W_;
-            std::vector<uint> lie_split_idx;
-
-            inline void checkSetup(){
-                BOOST_ASSERT_MSG(lie_split_idx.size()==W_, "setupManifold() was not called!");
-            }
-
-          protected:
-            struct PrivilegedCoordinate{
-                virtual std::string getName() const{ return {"<UntitledCoordinate>"}; }
-                virtual unsigned int getWeight() const = 0;
-                virtual TangentVector getTangent(const StatePtr center) const = 0;
-            };
-
-            void setupManifold(){
-                // Initialize splitting sequence;
-                W_ = 0;
-                uint ci=0;
-                for(auto& c: coordinates){
-                  W_+=c->getWeight();
-                  for(uint i=0;i<c->getWeight();i++){
-                      lie_split_idx.push_back(ci);
-                  }
-                  ci++;
-                }
-//                std::cout << "Splitting sequence initialized to: [";
-//                for (auto& i:lie_split_idx)
-//                  std::cout << i << ", ";
-//                std::cout << "\b\b];" << std::endl;
-            }
-
-        };
-
         class ReedsSheppManifold : public SubRiemannianManifold<ReedsSheppStateSpace>
         {
 
@@ -189,7 +109,7 @@ namespace ompl
         public:
 
             ReedsSheppManifold(double rho_):
-                SubRiemannianManifold(rho_)//, R_(rho_)
+                SubRiemannianManifold(rho_)
             {
                 coordinates.push_back(&f_);
                 coordinates.push_back(&h_);
@@ -197,7 +117,6 @@ namespace ompl
 
                 this->setupManifold();
             }
-
 
             bool inPositiveHalfspace(const StatePtr state,
                                      const StatePtr pivot,
@@ -214,17 +133,17 @@ namespace ompl
             class ReedsSheppOuterBox : public Base::OuterBox
             {
               private:
-                typedef std::vector<double> vec;
+                typedef std::array<double, 2> vec2d;
 
                 const ReedsSheppManifold& M;
                 double rho_;
 
-                vec getOutBoxHalfSides(double T) const{
+                std::vector<double> getOutBoxHalfSides(double T) const{
                   double latsize;
                   if(T<rho_*M_PI/2){
                     latsize = rho_*(1-cos(T/rho_));
                   }else{
-                    latsize = T+rho_*(1-M_PI/2); // R+T-R*PI/2
+                    latsize = T+rho_*(1-M_PI/2);
                   }
                   return {T, latsize, fmin(T/rho_, M_PI)};
                 }
@@ -242,7 +161,7 @@ namespace ompl
                     if(std::isinf(size))
                         return true;
 
-                    vec halfsizes(getOutBoxHalfSides(size));
+                    std::vector<double> halfsizes(getOutBoxHalfSides(size));
 
                     if(normal[0]==0 && normal[1]==0)
                         return fabs(center->as<StateType>()->getYaw()
@@ -250,13 +169,13 @@ namespace ompl
 
                     BOOST_ASSERT_MSG(normal[2]==0, "Unexpected normal vector for splitting plane");
 
-                    vec rcenter({center->as<StateType>()->getX()-state->as<StateType>()->getX(),
+                    vec2d rcenter({center->as<StateType>()->getX()-state->as<StateType>()->getX(),
                                  center->as<StateType>()->getY()-state->as<StateType>()->getY()});
 
-                    vec f(M.f_.getTangent(this->center));
-                    vec l(M.l_.getTangent(this->center));
-                    vec F({f[0]*halfsizes[0], f[1]*halfsizes[0]});
-                    vec L({l[0]*halfsizes[1], l[1]*halfsizes[1]});
+                    TangentVector f(M.f_.getTangent(this->center));
+                    TangentVector l(M.l_.getTangent(this->center));
+                    vec2d F({f[0]*halfsizes[0], f[1]*halfsizes[0]});
+                    vec2d L({l[0]*halfsizes[1], l[1]*halfsizes[1]});
 
                     double last_dotp = 0;
                     int a,b;
@@ -264,7 +183,7 @@ namespace ompl
                     {
                         a = ((i & 1) << 1)-1;
                         b = (i & 2)-1;
-                        vec rvertex({rcenter[0]+F[0]*a+L[0]*b,
+                        vec2d rvertex({rcenter[0]+F[0]*a+L[0]*b,
                                      rcenter[1]+F[1]*a+L[1]*b});
                         double dotp = rvertex[0]*normal[0]+rvertex[1]*normal[1];
 
