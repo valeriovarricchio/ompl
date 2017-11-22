@@ -37,91 +37,92 @@
 #ifndef OMPL_BASE_SPACES_SUB_RIEMANNIAN_MANIFOLD_
 #define OMPL_BASE_SPACES_SUB_RIEMANNIAN_MANIFOLD_
 
-namespace ompl
+namespace ompl {
+namespace base {
+
+/* _T must be a StateSpace type with a metric defined */
+// TODO can we concept-check at compile time?
+template <class _T>
+class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManifold.h
 {
-    namespace base
-    {
-        /* _T must be a StateSpace type with a metric defined */
-        // TODO can we concept-check at compile time?
-        template <class _T>
-        class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManifold.h
-        {
 
-          using _T::_T; // inherit base ctors
+  using _T::_T; // inherit base ctors
 
-          protected:
-            struct PrivilegedCoordinate;
+  protected:
+    struct PrivilegedCoordinate;
 
-          public:
-            typedef typename ompl::base::State* StatePtr;
-            typedef std::vector<double> TangentVector;
-            std::vector<PrivilegedCoordinate*> coordinates;
+  public:
+    typedef typename ompl::base::State* StatePtr;
+    typedef std::vector<double> TangentVector;
+    std::vector<PrivilegedCoordinate*> coordinates;
 
-            virtual ~SubRiemannianManifold(){} // TODO check this out
+    virtual ~SubRiemannianManifold(){} // TODO check this out
 
-            virtual bool inPositiveHalfspace(const StatePtr state,
-                                             const StatePtr pivot,
-                                             const TangentVector normal) const = 0;
+    virtual bool inPositiveHalfspace(const StatePtr state, const StatePtr pivot,
+                                     const TangentVector normal) const=0;
 
-            virtual TangentVector getSplittingNormal(const StatePtr state,
-                                                     uint depth){
-                checkSetup();
-                return coordinates[lie_split_idx[depth%W_]]->getTangent(state);
-            }
+    virtual TangentVector getSplittingNormal(const StatePtr state,
+                                             uint depth){
+        checkSetup();
+        return coordinates[lie_split_idx[depth%W_]]->getTangent(state);
+    }
 
-            class OuterBox{
-              protected:
-                double size;
-                StatePtr center;
-              public:
-                OuterBox(const StatePtr center_, double size_):
-                    size(size_), center(center_) // TODO note only copying pointer, relying on its validity!
-                {}
+    class OuterBox{
+      protected:
+        double size;
+        StatePtr center;
+      public:
+        OuterBox(const StatePtr center_, double size_):
+            size(size_), center(center_) // TODO note only copying pointer, relying on its validity!
+        {}
 
-                virtual bool intersectsHyperplane(const StatePtr state,
-                                      const std::vector<double>& normal) const = 0;
+        virtual bool intersectsHyperplane(const StatePtr state,
+                              const std::vector<double>& normal) const=0;
 
-                virtual ~OuterBox() = default;
-            };
+        virtual ~OuterBox() = default;
+    };
 
-            typedef std::shared_ptr<OuterBox> OuterBoxPtr;
+    typedef std::shared_ptr<OuterBox> OuterBoxPtr;
 
-            virtual OuterBoxPtr getOuterBox(const StatePtr center,
-                                    double size) const = 0;
-          private:
-            uint W_;
-            std::vector<uint> lie_split_idx;
+    virtual OuterBoxPtr getOuterBox(const StatePtr center, double size) const=0;
+  private:
+    uint W_;
+    std::vector<uint> lie_split_idx;
 
-            inline void checkSetup(){
-                BOOST_ASSERT_MSG(lie_split_idx.size()==W_, "setupManifold() was not called!");
-            }
+    inline void checkSetup(){
+        BOOST_ASSERT_MSG(lie_split_idx.size()==W_,
+                         "setupManifold() was not called!");
+    }
 
-          protected:
-            struct PrivilegedCoordinate{
-                virtual std::string getName() const{ return {"<UntitledCoordinate>"}; }
-                virtual unsigned int getWeight() const = 0;
-                virtual TangentVector getTangent(const StatePtr center) const = 0;
-            };
+  protected:
+    struct PrivilegedCoordinate{
+        virtual std::string getName() const{
+            return {"<UntitledCoordinate>"};
+        }
+        virtual unsigned int getWeight() const = 0;
+        virtual TangentVector getTangent(const StatePtr center) const=0;
+    };
 
-            void setupManifold(){
-                // Initialize splitting sequence;
-                W_ = 0;
-                uint ci=0;
-                for(auto& c: coordinates){
-                  W_+=c->getWeight();
-                  for(uint i=0;i<c->getWeight();i++){
-                      lie_split_idx.push_back(ci);
-                  }
-                  ci++;
-                }
-        //                std::cout << "Splitting sequence initialized to: [";
-        //                for (auto& i:lie_split_idx)
-        //                  std::cout << i << ", ";
-        //                std::cout << "\b\b];" << std::endl;
-            }
+    void setupManifold(){
+        // Initialize splitting sequence;
+        W_ = 0;
+        uint ci=0;
+        for(auto& c: coordinates){
+          W_+=c->getWeight();
+          for(uint i=0;i<c->getWeight();i++){
+              lie_split_idx.push_back(ci);
+          }
+          ci++;
+        }
+//      std::cout << "Splitting sequence initialized to: [";
+//      for (auto& i:lie_split_idx)
+//          std::cout << i << ", ";
+//      std::cout << "\b\b];" << std::endl;
+    }
 
-        };
-    } // end namespace base
+};
+
+} // end namespace base
 } // end namespace ompl
 
 #endif
