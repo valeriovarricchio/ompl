@@ -286,6 +286,7 @@ namespace ompl
         }
 
         void transcribeToOut(BPQ Q, std::vector<_MP>& out) const{
+            out.clear();
             out.reserve(Q.Q.size());
             for(auto& a:Q.Q)
                 out.push_back(a.motion);
