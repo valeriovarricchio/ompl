@@ -58,7 +58,7 @@ private:
             return {"longitudinal"};
         }
 
-        TangentVector getTangent(const StatePtr center) const {
+        TangentVector getTangent(const ompl::base::State* center) const {
             auto x = center->as<StateType>();
             return {cos(x->getYaw()), sin(x->getYaw()), 0.0};
         }
@@ -72,7 +72,7 @@ private:
             return {"heading"};
         }
 
-        TangentVector getTangent(const StatePtr center) const {
+        TangentVector getTangent(const ompl::base::State* center) const {
             return {0.0, 0.0, 1.0};
         }
     };
@@ -86,7 +86,7 @@ private:
             return {"lateral"};
         }
 
-        TangentVector getTangent(const StatePtr center) const {
+        TangentVector getTangent(const ompl::base::State* center) const {
             auto x = center->as<StateType>();
             return {-sin(x->getYaw()), cos(x->getYaw()), 0.0};
         }
@@ -107,7 +107,8 @@ public:
         this->setupManifold();
     }
 
-    bool inPositiveHalfspace(const StatePtr state, const StatePtr pivot,
+    bool inPositiveHalfspace(const ompl::base::State* state,
+                             const ompl::base::State* pivot,
                              const TangentVector normal) const
     {
         double dx = state->as<StateType>()->getX()-
@@ -139,13 +140,13 @@ public:
         }
 
       public:
-        ReedsSheppOuterBox(const StatePtr center_, double size_,
+        ReedsSheppOuterBox(const ompl::base::State* center_, double size_,
                            const ReedsSheppManifold& manifold):
             Base::OuterBox(center_, size_), M(manifold), rho_(M.rho_){}
 
         ~ReedsSheppOuterBox() = default;
 
-        bool intersectsHyperplane(const StatePtr state,
+        bool intersectsHyperplane(const ompl::base::State* state,
                                   const std::vector<double>& normal) const
         {
             if(std::isinf(size))
@@ -190,7 +191,7 @@ public:
         }
     };
 
-    OuterBoxPtr getOuterBox(const StatePtr x0, double size) const {
+    OuterBoxPtr getOuterBox(const ompl::base::State* x0, double size) const {
         return OuterBoxPtr(new ReedsSheppOuterBox(x0, size, *this));
     }
 };

@@ -34,6 +34,8 @@
 
 /* Author: Valerio Varricchio */
 
+#include <type_traits>
+
 #ifndef OMPL_BASE_SPACES_SUB_RIEMANNIAN_MANIFOLD_
 #define OMPL_BASE_SPACES_SUB_RIEMANNIAN_MANIFOLD_
 
@@ -52,16 +54,17 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
     struct PrivilegedCoordinate;
 
   public:
-    typedef typename ompl::base::State* StatePtr;
+
     typedef std::vector<double> TangentVector;
     std::vector<PrivilegedCoordinate*> coordinates;
 
     virtual ~SubRiemannianManifold(){} // TODO check this out
 
-    virtual bool inPositiveHalfspace(const StatePtr state, const StatePtr pivot,
+    virtual bool inPositiveHalfspace(const ompl::base::State* state,
+                                     const ompl::base::State* pivot,
                                      const TangentVector normal) const=0;
 
-    virtual TangentVector getSplittingNormal(const StatePtr state,
+    virtual TangentVector getSplittingNormal(const ompl::base::State* state,
                                              uint depth){
         checkSetup();
         return coordinates[lie_split_idx[depth%W_]]->getTangent(state);
@@ -70,13 +73,13 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
     class OuterBox{
       protected:
         double size;
-        StatePtr center;
+        const ompl::base::State* center;
       public:
-        OuterBox(const StatePtr center_, double size_):
+        OuterBox(const ompl::base::State* center_, double size_):
             size(size_), center(center_) // TODO note only copying pointer, relying on its validity!
         {}
 
-        virtual bool intersectsHyperplane(const StatePtr state,
+        virtual bool intersectsHyperplane(const ompl::base::State* state,
                               const std::vector<double>& normal) const=0;
 
         virtual ~OuterBox() = default;
@@ -84,7 +87,7 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
 
     typedef std::shared_ptr<OuterBox> OuterBoxPtr;
 
-    virtual OuterBoxPtr getOuterBox(const StatePtr center, double size) const=0;
+    virtual OuterBoxPtr getOuterBox(const ompl::base::State* center, double size) const=0;
   private:
     uint W_;
     std::vector<uint> lie_split_idx;
@@ -100,7 +103,7 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
             return {"<UntitledCoordinate>"};
         }
         virtual unsigned int getWeight() const = 0;
-        virtual TangentVector getTangent(const StatePtr center) const=0;
+        virtual TangentVector getTangent(const ompl::base::State* center) const=0;
     };
 
     void setupManifold(){
@@ -114,10 +117,10 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
           }
           ci++;
         }
-//      std::cout << "Splitting sequence initialized to: [";
-//      for (auto& i:lie_split_idx)
-//          std::cout << i << ", ";
-//      std::cout << "\b\b];" << std::endl;
+      std::cout << "Splitting sequence initialized to: [";
+      for (auto& i:lie_split_idx)
+          std::cout << i << ", ";
+      std::cout << "\b\b];" << std::endl;
     }
 
 };

@@ -257,7 +257,7 @@ private:
             listRecursion(top->children[1], out);
     }
 
-    void query(const MotionPtr& data, const NodePtr top, BPQ& Q){
+    void query(const MotionPtr& data, const NodePtr top, BPQ& Q) const {
         std::vector<ompl::base::State* > ghosts;
         M.ghostPoints(data->state, ghosts);
         for(auto& s: ghosts)
