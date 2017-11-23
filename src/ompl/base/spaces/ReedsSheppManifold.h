@@ -41,6 +41,8 @@
 #include "ompl/base/spaces/subRiemannianManifold.h"
 #include <boost/math/constants/constants.hpp>
 
+#include <easy/profiler.h>
+
 namespace ompl {
 namespace base {
 
@@ -48,6 +50,7 @@ class ReedsSheppManifold :
         public SubRiemannianManifold<ReedsSheppStateSpace> {
 
 private:
+    typedef std::array<double, 2> vec2d;
     typedef SubRiemannianManifold<ReedsSheppStateSpace> Base ;
     struct LongitudinalCoordinate : public Base::PrivilegedCoordinate{
         unsigned int getWeight() const {
@@ -77,6 +80,26 @@ private:
         }
     };
 
+    template<class at, class bt>
+    static double dotXY(const at& A, const bt& B) {
+        return A[0]*B[0]+A[1]*B[1];
+    }
+
+    static inline double mod2pi(const double& v) {
+        double rsp = fmod(v, 2.0 * M_PI);
+        if (rsp < -M_PI)
+            rsp += 2.0 * M_PI;
+        else if (rsp > M_PI)
+            rsp -= 2.0 * M_PI;
+        return rsp;
+    }
+
+    static inline vec2d diffXY(const ompl::base::State* A,
+                               const ompl::base::State* B) {
+        return {A->as<StateType>()->getX()-B->as<StateType>()->getX(),
+                A->as<StateType>()->getY()-B->as<StateType>()->getY()};
+    }
+
     struct LateralCoordinate : public Base::PrivilegedCoordinate{
         unsigned int getWeight() const {
             return 2;
@@ -91,6 +114,27 @@ private:
             return {-sin(x->getYaw()), cos(x->getYaw()), 0.0};
         }
     };
+
+    double df_(const ompl::base::State* A, const ompl::base::State* B) const{
+        return fabs(dotXY(f_.getTangent(A), diffXY(A,B)));
+    }
+
+    double df(const ompl::base::State* A, const ompl::base::State* B) const{
+        return std::max(df_(A,B), df_(B,A));
+    }
+
+    double dl_(const ompl::base::State* A, const ompl::base::State* B) const{
+        return fabs(dotXY(l_.getTangent(A), diffXY(A,B)));
+    }
+
+    double dl(const ompl::base::State* A, const ompl::base::State* B) const{
+        return std::max(dl_(A,B), dl_(B,A));
+    }
+
+    double dh(const ompl::base::State* A, const ompl::base::State* B) const{
+        return std::min(fabs(mod2pi(A->as<StateType>()->getYaw()-
+                                    B->as<StateType>()->getYaw())), M_PI);
+    }
 
     LateralCoordinate l_;
     LongitudinalCoordinate f_;
@@ -120,10 +164,23 @@ public:
         return dx*normal[0]+dy*normal[1]+dh*normal[2]>0;
     }
 
+    double lowerBound(const ompl::base::State* A,
+                      const ompl::base::State* B) const {
+        EASY_BLOCK("RS: lowerBound");
+        double tf = df(A,B);
+        double th = dh(A,B)*rho_;
+        double DL = dl(A,B);
+        double tl = (DL>rho_)?
+                      (DL-rho_)+M_PI*rho_/2:
+                      acos(1-DL/rho_)*rho_;
+        double tbox = std::max(std::max(tf, th), tl);
+        // return std::max(tbox, eh(A,B)); // if you also implement euclidean
+        return tbox;
+    }
+
     class ReedsSheppOuterBox : public Base::OuterBox
     {
       private:
-        typedef std::array<double, 2> vec2d;
 
         const ReedsSheppManifold& M;
         double rho_;
@@ -131,7 +188,7 @@ public:
         std::vector<double> getOutBoxHalfSides(double T) const
         {
           double latsize;
-          if(T<rho_*M_PI/2){
+          if(T<rho_*M_PI/2){             // TODO use boost pi?
             latsize = rho_*(1-cos(T/rho_));
           }else{
             latsize = T+rho_*(1-M_PI/2);

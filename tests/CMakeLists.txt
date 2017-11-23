@@ -9,6 +9,10 @@ if(WIN32)
 endif(WIN32)
 configure_file("${TEST_RESOURCES_DIR}/config.h.in" "${TEST_RESOURCES_DIR}/config.h")
 
+find_package(easy_profiler REQUIRED)
+add_executable(nntest datastructures/nntest.cpp)
+target_link_libraries(nntest ompl easy_profiler)
+
 if (OMPL_BUILD_TESTS)
     find_package(Boost 1.54 COMPONENTS unit_test_framework REQUIRED)
 

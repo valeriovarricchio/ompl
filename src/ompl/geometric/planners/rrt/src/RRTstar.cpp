@@ -249,6 +249,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTstar::solve(const base::PlannerTer
 
     while (ptc == false)
     {
+        EASY_BLOCK("RRT* iteration")
         iterations_++;
 
         // sample random state (with goal biasing)

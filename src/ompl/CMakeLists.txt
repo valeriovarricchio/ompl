@@ -54,6 +54,8 @@ endif()
 #############################################
 # Build and install the library             #
 #############################################
+find_package(easy_profiler REQUIRED)
+
 if(MSVC OR IS_ICPC)
   add_library(ompl STATIC ${OMPL_SOURCE_CODE})
 else(MSVC OR IS_ICPC)
@@ -67,7 +69,8 @@ target_link_libraries(ompl
   ${Boost_FILESYSTEM_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${Boost_CHRONO_LIBRARY}
-  ${CMAKE_THREAD_LIBS_INIT})
+  ${CMAKE_THREAD_LIBS_INIT}
+  easy_profiler)
 
 if(MSVC)
   set_target_properties(ompl PROPERTIES VERSION "${OMPL_VERSION}" STATIC_LIBRARY_FLAGS "psapi.lib ws2_32.lib")

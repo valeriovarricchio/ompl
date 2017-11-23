@@ -48,6 +48,8 @@
 #include <utility>
 #include <list>
 
+#include <easy/profiler.h>
+
 namespace ompl
 {
     namespace geometric

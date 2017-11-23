@@ -45,6 +45,7 @@
 #include <set>
 #include <list>
 
+#include <easy/profiler.h>
 namespace ompl {
 
 // MotionPtr meant to be a pointer to Motion (subclass of RRTStar)
@@ -126,7 +127,7 @@ class NearestNeighborsSRT: public ompl::NearestNeighbors<MotionPtr>
         }
 
         double getUpperBound(){
-            if(rLim<std::numeric_limits<double>::infinity())
+            if(!std::isinf(rLim))
                 return rLim;
 
             if(Q.size()<kLim)
@@ -216,14 +217,16 @@ public:
     }
 
     MotionPtr nearest(const MotionPtr &data) const{
+        EASY_BLOCK("nearest");
         BPQ Q;
-        Q.setKlim(1);
+        Q.setKlim(100);
         query(data, root, Q);
         return Q.Q.begin()->motion;
     }
 
     void nearestK(const MotionPtr &data, std::size_t k,
                   std::vector<MotionPtr> &out) const {
+        EASY_BLOCK("nearestK");
         BPQ Q;
         Q.setKlim(k);
         query(data, root, Q);
@@ -268,13 +271,16 @@ private:
     }
 
     void query(const ompl::base::State* state, const NodePtr top, BPQ& Q) const {
+        //EASY_BLOCK("query");
+        bool side(0);
+        if(!top->isLeaf()){
+            side = M.inPositiveHalfspace(state, top->motion->state, top->normal);
+            if(top->hasChild(side))
+                query(state, top->children[side], Q);
+        }
 
-        bool side = M.inPositiveHalfspace(state, top->motion->state, top->normal);
-
-        if(top->hasChild(side))
-            query(state, top->children[side], Q);
-
-        Q.insert({top->motion, M.distance(state,top->motion->state)});
+        if(M.lowerBound(state,top->motion->state)<Q.getUpperBound())
+            Q.insert({top->motion, M.distance(state,top->motion->state)});
 
         if(top->hasChild(1-side)){
             auto oBox = M.getOuterBox(state, Q.getUpperBound());

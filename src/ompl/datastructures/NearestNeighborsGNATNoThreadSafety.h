@@ -49,6 +49,8 @@
 #include <algorithm>
 #include <utility>
 
+#include <easy/profiler.h>
+
 namespace ompl
 {
     /** \brief Geometric Near-neighbor Access Tree (GNAT), a data
@@ -206,6 +208,8 @@ namespace ompl
 
         _T nearest(const _T &data) const override
         {
+            EASY_BLOCK("GNAT:nearest");
+
             if (size_)
             {
                 nearestKInternal(data, 1);
@@ -222,6 +226,7 @@ namespace ompl
         /// Return the k nearest neighbors in sorted order
         void nearestK(const _T &data, std::size_t k, std::vector<_T> &nbh) const override
         {
+            EASY_BLOCK("GNAT:nearestK");
             nbh.clear();
             if (k == 0)
                 return;

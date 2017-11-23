@@ -64,6 +64,9 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
                                      const ompl::base::State* pivot,
                                      const TangentVector normal) const=0;
 
+    virtual double lowerBound(const ompl::base::State* A,
+                      const ompl::base::State* B) const =0;
+
     virtual TangentVector getSplittingNormal(const ompl::base::State* state,
                                              uint depth){
         checkSetup();

@@ -40,6 +40,8 @@
 #include <queue>
 #include <boost/math/constants/constants.hpp>
 
+#include <easy/profiler.h>
+
 using namespace ompl::base;
 
 namespace
@@ -512,6 +514,7 @@ ompl::base::ReedsSheppStateSpace::ReedsSheppPath::ReedsSheppPath(const ReedsShep
 
 double ompl::base::ReedsSheppStateSpace::distance(const State *state1, const State *state2) const
 {
+    EASY_BLOCK("RS:dist");
     return rho_ * reedsShepp(state1, state2).length();
 }
 
