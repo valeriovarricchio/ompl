@@ -876,6 +876,15 @@ ompl::base::CompoundStateSpace::CompoundStateSpace(const std::vector<StateSpaceP
         addSubspace(components[i], weights[i]);
 }
 
+void ompl::base::CompoundStateSpace::updateGhostCombinations(){
+    std::list<size_t> ghostCardinalities;
+    for (unsigned int i = 0; i < componentCount_; ++i)
+        ghostCardinalities.push_back(components_[i]->ghostPointsCount());
+
+    ghostCombinations_.clear();
+    combine(ghostCardinalities, ghostCombinations_);
+}
+
 void ompl::base::CompoundStateSpace::addSubspace(const StateSpacePtr &component, double weight)
 {
     if (locked_)
@@ -886,6 +895,7 @@ void ompl::base::CompoundStateSpace::addSubspace(const StateSpacePtr &component,
     weights_.push_back(weight);
     weightSum_ += weight;
     componentCount_ = components_.size();
+    updateGhostCombinations();
 }
 
 bool ompl::base::CompoundStateSpace::isCompound() const
@@ -1037,23 +1047,16 @@ bool ompl::base::CompoundStateSpace::satisfiesBounds(const State *state) const
 
 void ompl::base::CompoundStateSpace::ghostPoints(State* state, std::vector<State*>& out) const
 {
-    auto *cstate = static_cast<CompoundState *>(state);
     std::vector<std::vector<State*> > ghosts;
     ghosts.resize(componentCount_);
 
-    std::list<size_t> cardinalities;
-
     // Compute ghosts for each component
-    for (unsigned int i = 0; i < componentCount_; ++i){
+    auto *cstate = static_cast<CompoundState *>(state);
+    for (unsigned int i = 0; i < componentCount_; ++i)
         components_[i]->ghostPoints(cstate->components[i], ghosts[i]);
-        cardinalities.push_back(ghosts[i].size());
-    }
 
-    // Combine ghost points in all possible ways
-    std::vector<std::vector<size_t> > combinations;
-    combine(cardinalities, combinations);
-
-    for (const auto& comb: combinations)
+    // Combine ghosts in all possible ways
+    for (const auto& comb: ghostCombinations_)
     {
         auto *combscopy = static_cast<CompoundState*>(cloneState(state));
         for (size_t i=0;i<componentCount_;i++){
@@ -1068,6 +1071,14 @@ void ompl::base::CompoundStateSpace::ghostPoints(State* state, std::vector<State
         for(auto& ghost: ghosts[i]){
             components_[i]->freeState(ghost);
     }
+}
+
+size_t ompl::base::CompoundStateSpace::ghostPointsCount() const
+{
+    size_t rsp = 1;
+    for (unsigned int i = 0; i < componentCount_; ++i)
+        rsp*= components_[i]->ghostPointsCount();
+    return rsp;
 }
 
 void ompl::base::CompoundStateSpace::combine(const std::list<size_t>& cardinalities,

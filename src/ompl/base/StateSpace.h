@@ -310,6 +310,12 @@ namespace ompl
                 out.push_back(cloneState(state));
             }
 
+            /** \brief Number of ghost points returned by ghostPoints(). Note that consistency is not
+                 enforced automatically. */
+            virtual size_t ghostPointsCount() const {
+                return 1;
+            }
+
             /** \brief Copy a state to another. The memory of source and destination should NOT overlap.
                 \note For more advanced state copying methods (partial copy, for example), see \ref advancedStateCopy.
                */
@@ -694,6 +700,8 @@ namespace ompl
 
             void ghostPoints(State *state, std::vector<State* >& out) const override;
 
+            size_t ghostPointsCount() const override;
+
             void copyState(State *destination, const State *source) const override;
 
             unsigned int getSerializationLength() const override;
@@ -754,14 +762,20 @@ namespace ompl
             /** \brief The sum of all the weights in \e weights_ */
             double weightSum_{0.0};
 
+
             /** \brief Flag indicating whether adding further components is allowed or not */
             bool locked_{false};
 
-        private:
+            /** \brief Precomputed combination scheme for the ghost points of subspaces. Speeds up computation of
+             * ghost points by only running combine() once. */
+            std::vector<std::vector<size_t> > ghostCombinations_;
+
             /** \brief List all the ordered tuples $(k_1, k_2, ...k_m)$ with $k_i \in [0, 1, ... n_{i-1}]$.
              *  \param cardinalities, a list containing $[n_1, n_2, ..., n_m]$
                 \param combinations, the output vector with all the tuples*/
             void combine(const std::list<size_t>& cardinalities, std::vector<std::vector<size_t> >& combinations) const;
+
+            void updateGhostCombinations();
         };
 
         /** \addtogroup stateAndSpaceOperators

@@ -109,6 +109,10 @@ void ompl::base::SO2StateSpace::ghostPoints(State *state, std::vector<State*>& o
     out[2]->as<StateType>()->value -= 2.0 * boost::math::constants::pi<double>();
 }
 
+size_t ompl::base::SO2StateSpace::ghostPointsCount() const
+{
+    return 3;
+}
 
 void ompl::base::SO2StateSpace::copyState(State *destination, const State *source) const
 {

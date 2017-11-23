@@ -99,6 +99,8 @@ namespace ompl
 
             void ghostPoints(State *state, std::vector<State *>& out) const override;
 
+            size_t ghostPointsCount() const override;
+
             void copyState(State *destination, const State *source) const override;
 
             unsigned int getSerializationLength() const override;
