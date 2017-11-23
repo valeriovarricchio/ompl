@@ -47,6 +47,7 @@
 #include <boost/concept_check.hpp>
 #include <iostream>
 #include <vector>
+#include <list>
 #include <string>
 #include <map>
 
@@ -300,6 +301,14 @@ namespace ompl
             /** \brief Check if a state is inside the bounding box. For unbounded spaces this function
                 can always return true. */
             virtual bool satisfiesBounds(const State *state) const = 0;
+
+            /** \brief Provides points equivalent to the first argument. Useful for space-partitioning
+             *   algorithms (e.g. kdtree) to handle the topology correctly while working on a quotient
+             *   space. By default, it forwards a copy of the input point. */
+            virtual void ghostPoints(State *state, std::vector<State* >& out) const {
+                out.clear();
+                out.push_back(cloneState(state));
+            }
 
             /** \brief Copy a state to another. The memory of source and destination should NOT overlap.
                 \note For more advanced state copying methods (partial copy, for example), see \ref advancedStateCopy.
@@ -683,6 +692,8 @@ namespace ompl
 
             bool satisfiesBounds(const State *state) const override;
 
+            void ghostPoints(State *state, std::vector<State* >& out) const override;
+
             void copyState(State *destination, const State *source) const override;
 
             unsigned int getSerializationLength() const override;
@@ -745,6 +756,12 @@ namespace ompl
 
             /** \brief Flag indicating whether adding further components is allowed or not */
             bool locked_{false};
+
+        private:
+            /** \brief List all the ordered tuples $(k_1, k_2, ...k_m)$ with $k_i \in [0, 1, ... n_{i-1}]$.
+             *  \param cardinalities, a list containing $[n_1, n_2, ..., n_m]$
+                \param combinations, the output vector with all the tuples*/
+            void combine(const std::list<size_t>& cardinalities, std::vector<std::vector<size_t> >& combinations) const;
         };
 
         /** \addtogroup stateAndSpaceOperators

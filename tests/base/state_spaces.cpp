@@ -50,6 +50,7 @@
 #include "ompl/base/spaces/DiscreteStateSpace.h"
 #include "ompl/base/spaces/ReedsSheppStateSpace.h"
 #include "ompl/base/spaces/DubinsStateSpace.h"
+#include "ompl/base/spaces/ReedsSheppManifold.h"
 
 #include <boost/math/constants/constants.hpp>
 #include "../BoostTestTeamCityReporter.h"
@@ -416,3 +417,35 @@ BOOST_AUTO_TEST_CASE(Compound_Simple)
     BOOST_CHECK(m3->includes(m3));
     BOOST_CHECK(t->includes(t));
 }
+
+BOOST_AUTO_TEST_CASE(ReedsSheppGhostPoints)
+{
+    base::StateSpacePtr space(new base::ReedsSheppManifold(1.0));
+
+    double x = 0;
+    double y = 0;
+    double yaw = 0;
+
+    base::ScopedState<> st(space);
+    st->as<base::SE2StateSpace::StateType>()->setX(x);
+    st->as<base::SE2StateSpace::StateType>()->setY(y);
+    st->as<base::SE2StateSpace::StateType>()->setYaw(yaw);
+
+    std::vector<base::State* > ghosts;
+    space->ghostPoints(st->as<base::State>(), ghosts);
+
+    BOOST_CHECK_EQUAL(ghosts.size(), 3);
+    BOOST_CHECK_EQUAL(ghosts[0]->as<base::SE2StateSpace::StateType>()->getX(), x);
+    BOOST_CHECK_EQUAL(ghosts[0]->as<base::SE2StateSpace::StateType>()->getY(), y);
+    BOOST_CHECK_EQUAL(ghosts[0]->as<base::SE2StateSpace::StateType>()->getYaw(), yaw);
+    BOOST_CHECK_EQUAL(ghosts[1]->as<base::SE2StateSpace::StateType>()->getX(), x);
+    BOOST_CHECK_EQUAL(ghosts[1]->as<base::SE2StateSpace::StateType>()->getY(), y);
+    BOOST_CHECK_EQUAL(ghosts[1]->as<base::SE2StateSpace::StateType>()->getYaw(),
+            yaw+2*boost::math::constants::pi<double>());
+    BOOST_CHECK_EQUAL(ghosts[2]->as<base::SE2StateSpace::StateType>()->getX(), x);
+    BOOST_CHECK_EQUAL(ghosts[2]->as<base::SE2StateSpace::StateType>()->getY(), y);
+    BOOST_CHECK_EQUAL(ghosts[2]->as<base::SE2StateSpace::StateType>()->getYaw(),
+            yaw-2*boost::math::constants::pi<double>());
+
+}
+

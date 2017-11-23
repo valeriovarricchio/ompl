@@ -96,6 +96,20 @@ bool ompl::base::SO2StateSpace::satisfiesBounds(const State *state) const
            (state->as<StateType>()->value >= -boost::math::constants::pi<double>());
 }
 
+void ompl::base::SO2StateSpace::ghostPoints(State *state, std::vector<State*>& out) const
+{
+    for(auto& s:out)
+        freeState(s);
+    out.clear();
+    out.push_back(cloneState(state));
+    enforceBounds(out[0]);
+    out.push_back(cloneState(out[0]));
+    out.push_back(cloneState(out[1]));
+    out[1]->as<StateType>()->value += 2.0 * boost::math::constants::pi<double>();
+    out[2]->as<StateType>()->value -= 2.0 * boost::math::constants::pi<double>();
+}
+
+
 void ompl::base::SO2StateSpace::copyState(State *destination, const State *source) const
 {
     destination->as<StateType>()->value = source->as<StateType>()->value;

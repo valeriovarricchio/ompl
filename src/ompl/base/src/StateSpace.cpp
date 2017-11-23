@@ -1035,6 +1035,64 @@ bool ompl::base::CompoundStateSpace::satisfiesBounds(const State *state) const
     return true;
 }
 
+void ompl::base::CompoundStateSpace::ghostPoints(State* state, std::vector<State*>& out) const
+{
+    auto *cstate = static_cast<CompoundState *>(state);
+    std::vector<std::vector<State*> > ghosts;
+    ghosts.resize(componentCount_);
+
+    std::list<size_t> cardinalities;
+
+    // Compute ghosts for each component
+    for (unsigned int i = 0; i < componentCount_; ++i){
+        components_[i]->ghostPoints(cstate->components[i], ghosts[i]);
+        cardinalities.push_back(ghosts[i].size());
+    }
+
+    // Combine ghost points in all possible ways
+    std::vector<std::vector<size_t> > combinations;
+    combine(cardinalities, combinations);
+
+    for (const auto& comb: combinations)
+    {
+        auto *combscopy = static_cast<CompoundState*>(cloneState(state));
+        for (size_t i=0;i<componentCount_;i++){
+            components_[i]->freeState(combscopy->components[i]);
+            combscopy->components[i]=components_[i]->cloneState(ghosts[i][comb[i]]);
+        }
+        out.push_back(combscopy);
+    }
+
+    // Free memory of ghosts
+    for (unsigned int i = 0; i < componentCount_; ++i)
+        for(auto& ghost: ghosts[i]){
+            components_[i]->freeState(ghost);
+    }
+}
+
+void ompl::base::CompoundStateSpace::combine(const std::list<size_t>& cardinalities,
+                                             std::vector<std::vector<size_t> >& combs) const
+{
+
+    if(cardinalities.size()==1){
+        for(size_t i=0;i<cardinalities.front();i++)
+            combs.push_back({i});
+        return;
+    }
+
+    auto head_cardinalities(cardinalities);
+    head_cardinalities.pop_back();
+    std::vector<std::vector<size_t> > head_combs;
+    combine(head_cardinalities, head_combs);
+
+    for(auto& c: head_combs){
+        for(size_t i=0;i<cardinalities.back();i++){
+            combs.push_back(c);
+            combs.back().push_back(i);
+        }
+    }
+}
+
 void ompl::base::CompoundStateSpace::copyState(State *destination, const State *source) const
 {
     auto *cdest = static_cast<CompoundState *>(destination);

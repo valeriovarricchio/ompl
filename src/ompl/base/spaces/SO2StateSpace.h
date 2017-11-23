@@ -97,6 +97,8 @@ namespace ompl
             /** \brief Check if the value of the state is in the interval [-Pi, Pi) */
             bool satisfiesBounds(const State *state) const override;
 
+            void ghostPoints(State *state, std::vector<State *>& out) const override;
+
             void copyState(State *destination, const State *source) const override;
 
             unsigned int getSerializationLength() const override;

@@ -192,8 +192,7 @@ public:
     }
 
     bool remove(const MotionPtr &data, NodePtr top){
-        if(top->motion == data){ // TODO check if pointer comparison is right
-                                 // or shall we compare states instead?
+        if(top->motion == data){ // NOTE if states ain't copied, pointer comparison is ok
             if(!top->isLeaf()){
                 OMPL_ERROR("Cannot remove a non-leaf node!"); // TODO implement removal of non-leaves
                 return 0;
@@ -202,8 +201,7 @@ public:
             top->parent->children[top->side] = NULL; // this should effectively delete the node
                                                      // since no other references should exist
                                                      // TODO test
-            if(size_ >0) // TODO maybe unnecessary (else unreachable)
-               size_--;
+            size_--;
             return 1;
         }
 
@@ -259,20 +257,29 @@ private:
             listRecursion(top->children[1], out);
     }
 
-    void query(const MotionPtr &data, const NodePtr top, BPQ& Q) const {
+    void query(const MotionPtr& data, const NodePtr top, BPQ& Q){
+        std::vector<ompl::base::State* > ghosts;
+        M.ghostPoints(data->state, ghosts);
+        for(auto& s: ghosts)
+        {
+           query(s, root, Q);
+           M.freeState(s);
+        }
+    }
 
-        bool side = M.inPositiveHalfspace(data->state, top->motion->state,
-                              top->normal);
+    void query(const ompl::base::State* state, const NodePtr top, BPQ& Q) const {
+
+        bool side = M.inPositiveHalfspace(state, top->motion->state, top->normal);
 
         if(top->hasChild(side))
-            query(data, top->children[side], Q);
+            query(state, top->children[side], Q);
 
-        Q.insert({top->motion, M.distance(data->state,top->motion->state)});
+        Q.insert({top->motion, M.distance(state,top->motion->state)});
 
         if(top->hasChild(1-side)){
-            auto oBox = M.getOuterBox(data->state, Q.getUpperBound());
+            auto oBox = M.getOuterBox(state, Q.getUpperBound());
             if(oBox->intersectsHyperplane(top->motion->state, top->normal))
-                query(data, top->children[1-side], Q);
+                query(state, top->children[1-side], Q);
         }
     }
 
