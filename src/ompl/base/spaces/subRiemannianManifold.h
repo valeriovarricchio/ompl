@@ -68,7 +68,7 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
                       const ompl::base::State* B) const =0;
 
     virtual TangentVector getSplittingNormal(const ompl::base::State* state,
-                                             uint depth){
+                                             uint depth) const {
         checkSetup();
         return coordinates[lie_split_idx[depth%W_]]->getTangent(state);
     }
@@ -95,7 +95,7 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
     uint W_;
     std::vector<uint> lie_split_idx;
 
-    inline void checkSetup(){
+    inline void checkSetup() const{
         BOOST_ASSERT_MSG(lie_split_idx.size()==W_,
                          "setupManifold() was not called!");
     }

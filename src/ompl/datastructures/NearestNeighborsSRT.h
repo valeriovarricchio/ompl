@@ -178,20 +178,6 @@ public:
         }
     }
 
-    void add(const _T &data, const NodePtr top){ // TODO should be private
-        int side = M.inPositiveHalfspace(data->state, top->motion->state,
-                                         top->normal);
-
-        if(top->hasChild(side)){
-            add(data, top->children[side]);
-        }else{
-            NodePtr newnode(new Node(data,
-                 M.getSplittingNormal(data->state, top->depth+1)));
-            top->addChild(newnode, side);
-            size_++;
-        }
-    }
-
     bool remove(const _T &data){
         if(!root.get()){
             return false;
@@ -266,6 +252,20 @@ private:
             listRecursion(top->children[0], out);
         if(top->hasChild(1))
             listRecursion(top->children[1], out);
+    }
+
+    void add(const _T &data, const NodePtr top){
+        int side = M.inPositiveHalfspace(data->state, top->motion->state,
+                                         top->normal);
+
+        if(top->hasChild(side)){
+            add(data, top->children[side]);
+        }else{
+            NodePtr newnode(new Node(data,
+                 M.getSplittingNormal(data->state, top->depth+1)));
+            top->addChild(newnode, side);
+            size_++;
+        }
     }
 
     void query(const _T& data, const NodePtr top, BPQ& Q) const {
