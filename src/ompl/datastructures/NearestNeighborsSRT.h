@@ -48,30 +48,31 @@
 #include <easy/profiler.h>
 namespace ompl {
 
-// MotionPtr meant to be a pointer to Motion (subclass of RRTStar)
+// _T meant to be a pointer to Motion (subclass of RRTStar)
 // ManifoldType meant to be derived from SubRiemannianManifold
 
-template <typename MotionPtr, typename ManifoldType>
-class NearestNeighborsSRT: public ompl::NearestNeighbors<MotionPtr>
+template <typename _T, typename ManifoldType>
+class NearestNeighborsSRT: public ompl::NearestNeighbors<_T>
 {
 
-    typedef typename ompl::NearestNeighbors<MotionPtr> Base;
+    typedef typename ompl::NearestNeighbors<_T> Base;
     class Node;
     typedef std::shared_ptr<Node> NodePtr;
 
     const ManifoldType& M;
+    size_t* distEvaluationCounter_;
 
     // Helper for KDTree structure
     struct Node
     {
-        MotionPtr motion;
+        _T motion;
         std::vector<double> normal;
         uint depth;
         std::array<NodePtr, 2> children;
         Node* parent;
         uint side;
 
-        Node(const MotionPtr& motion_, const std::vector<double>& normal_):
+        Node(const _T& motion_, const std::vector<double>& normal_):
              motion(motion_), normal(normal_), depth(0) {}
 
         inline bool isLeaf(){
@@ -92,7 +93,8 @@ class NearestNeighborsSRT: public ompl::NearestNeighbors<MotionPtr>
 
     // Helpers for a Bounded Priority Queue (BPQ)
     struct Qelem {
-        MotionPtr motion;
+        const ManifoldType& M;
+        _T motion;
         double score;
         bool operator<(const Qelem& other) const {
             return score < other.score;
@@ -142,15 +144,19 @@ class NearestNeighborsSRT: public ompl::NearestNeighbors<MotionPtr>
 
 public:
     NearestNeighborsSRT(const ManifoldType& M_):
-        ompl::NearestNeighbors<MotionPtr>(), M(M_), root(NULL), size_(0) {}
+        ompl::NearestNeighbors<_T>(), M(M_), root(NULL), size_(0) {}
 
     ~NearestNeighborsSRT() = default; // TODO is this ok?
 
     void setDistanceFunction(const typename Base::DistanceFunction& f)
     {
-        OMPL_INFORM("NearestNeighborsSRT: setDistanceFunction() call ignored. "
-                    "The SRT algorithm assumes the distance function associated"
-                    " to the corresponding subriemannian geometry.");
+        OMPL_WARN("NearestNeighborsSRT: setDistanceFunction() is ignored. "
+                  "The SRT algorithm only works for the distance function associated"
+                  " to the corresponding subriemannian geometry.");
+    }
+
+    void setDistanceEvaluationCounter(size_t* counter){
+        distEvaluationCounter_ = counter;
     }
 
     bool reportsSortedResults() const {
@@ -161,7 +167,7 @@ public:
         root = NULL; // NOTE: this should destroy the entire tree, TODO check
     }
 
-    void add(const MotionPtr &data){
+    void add(const _T &data){
         if(!root.get()){
             root = NodePtr(new Node(data, M.getSplittingNormal(data->state,0)));
             size_=1;
@@ -170,7 +176,7 @@ public:
         }
     }
 
-    void add(const MotionPtr &data, const NodePtr top){ // TODO should be private
+    void add(const _T &data, const NodePtr top){ // TODO should be private
         int side = M.inPositiveHalfspace(data->state, top->motion->state,
                                          top->normal);
 
@@ -184,7 +190,7 @@ public:
         }
     }
 
-    bool remove(const MotionPtr &data){
+    bool remove(const _T &data){
         if(!root.get()){
             return false;
         }
@@ -192,7 +198,7 @@ public:
         return remove(data, root);
     }
 
-    bool remove(const MotionPtr &data, NodePtr top){
+    bool remove(const _T &data, NodePtr top){
         if(top->motion == data){ // NOTE if states ain't copied, pointer comparison is ok
             if(!top->isLeaf()){
                 OMPL_ERROR("Cannot remove a non-leaf node!"); // TODO implement removal of non-leaves
@@ -216,16 +222,16 @@ public:
         return 0;
     }
 
-    MotionPtr nearest(const MotionPtr &data) const{
+    _T nearest(const _T &data) const{
         EASY_BLOCK("nearest");
         BPQ Q;
-        Q.setKlim(100);
+        Q.setKlim(1);
         query(data, root, Q);
         return Q.Q.begin()->motion;
     }
 
-    void nearestK(const MotionPtr &data, std::size_t k,
-                  std::vector<MotionPtr> &out) const {
+    void nearestK(const _T &data, std::size_t k,
+                  std::vector<_T> &out) const {
         EASY_BLOCK("nearestK");
         BPQ Q;
         Q.setKlim(k);
@@ -233,8 +239,8 @@ public:
         transcribeQueue(Q,out);
     }
 
-    void nearestR(const MotionPtr &data, double radius,
-                  std::vector<MotionPtr> &out) const {
+    void nearestR(const _T &data, double radius,
+                  std::vector<_T> &out) const {
         BPQ Q;
         Q.setRlim(radius);
         query(data, root, Q);
@@ -245,14 +251,14 @@ public:
         return size_;
     }
 
-    void list(std::vector<MotionPtr> &data) const {
+    void list(std::vector<_T> &data) const {
         data.clear();
         data.reserve(size_);
         listRecursion(root, data);
     }
 
 private:
-    void listRecursion(NodePtr top, std::vector<MotionPtr>& out) const {
+    void listRecursion(NodePtr top, std::vector<_T>& out) const {
         out.push_back(top->motion);
         if(top->hasChild(0))
             listRecursion(top->children[0], out);
@@ -260,7 +266,7 @@ private:
             listRecursion(top->children[1], out);
     }
 
-    void query(const MotionPtr& data, const NodePtr top, BPQ& Q) const {
+    void query(const _T& data, const NodePtr top, BPQ& Q) const {
         std::vector<ompl::base::State* > ghosts;
         M.ghostPoints(data->state, ghosts);
         for(auto& s: ghosts)
@@ -279,8 +285,11 @@ private:
                 query(state, top->children[side], Q);
         }
 
-        if(M.lowerBound(state,top->motion->state)<Q.getUpperBound())
-            Q.insert({top->motion, M.distance(state,top->motion->state)});
+        if(M.lowerBound(state,top->motion->state)<Q.getUpperBound()){
+            Q.insert({M, top->motion, M.distance(state,top->motion->state)});
+            if(distEvaluationCounter_)
+                (*distEvaluationCounter_)++;
+        }
 
         if(top->hasChild(1-side)){
             auto oBox = M.getOuterBox(state, Q.getUpperBound());
@@ -289,7 +298,7 @@ private:
         }
     }
 
-    void transcribeQueue(BPQ Q, std::vector<MotionPtr>& out) const {
+    void transcribeQueue(BPQ Q, std::vector<_T>& out) const {
         out.clear();
         out.reserve(Q.Q.size());
         for(auto& a:Q.Q)
