@@ -60,7 +60,9 @@ class NearestNeighborsSRT: public ompl::NearestNeighbors<_T>
     typedef std::shared_ptr<Node> NodePtr;
 
     const ManifoldType& M;
-    size_t* distEvaluationCounter_;
+    size_t *distEvaluationCounter_,
+           *nodesVisitedCounter_,
+           *leavesVisitedCounter_;
 
     // Helper for KDTree structure
     struct Node
@@ -159,6 +161,14 @@ public:
 
     void setDistanceEvaluationCounter(size_t* counter){
         distEvaluationCounter_ = counter;
+    }
+
+    void setNodesVisitedCounter(size_t* counter){
+        nodesVisitedCounter_ = counter;
+    }
+
+    void setLeavesVisitedCounter(size_t* counter){
+        leavesVisitedCounter_ = counter;
     }
 
     bool reportsSortedResults() const {
@@ -271,6 +281,10 @@ private:
     void query(const _T& data, const NodePtr top, BPQ& Q) const {
         std::vector<ompl::base::State* > ghosts;
         M.ghostPoints(data->state, ghosts);
+        if(nodesVisitedCounter_) *nodesVisitedCounter_ = 0;
+        if(leavesVisitedCounter_) *leavesVisitedCounter_= 0;
+        if(distEvaluationCounter_) *distEvaluationCounter_ = 0;
+
         for(auto& s: ghosts)
         {
            query(s, root, Q);
@@ -280,17 +294,18 @@ private:
 
     void query(const ompl::base::State* state, const NodePtr top, BPQ& Q) const {
         //EASY_BLOCK("query");
+        if(nodesVisitedCounter_) (*nodesVisitedCounter_)++;
         bool side(0);
         if(!top->isLeaf()){
             side = M.inPositiveHalfspace(state, top->motion->state, top->normal);
             if(top->hasChild(side))
                 query(state, top->children[side], Q);
-        }
+        }else if(leavesVisitedCounter_) (*leavesVisitedCounter_)++;
 
-        if(M.lowerBound(state,top->motion->state)<Q.getUpperBound()){
+        auto Qub = Q.getUpperBound();
+        if(std::isinf(Qub) || M.lowerBound(state,top->motion->state)<Qub){
             Q.insert({M, top->motion, M.distance(state,top->motion->state)});
-            if(distEvaluationCounter_)
-                (*distEvaluationCounter_)++;
+            if(distEvaluationCounter_) (*distEvaluationCounter_)++;
         }
 
         if(top->hasChild(1-side)){
