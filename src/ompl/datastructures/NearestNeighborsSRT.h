@@ -97,6 +97,8 @@ class NearestNeighborsSRT: public ompl::NearestNeighbors<_T>
         _T motion;
         double score;
         bool operator<(const Qelem& other) const {
+            if(M.equalStates(motion->state, other.motion->state))
+                return false;
             return score < other.score;
         }
     };
