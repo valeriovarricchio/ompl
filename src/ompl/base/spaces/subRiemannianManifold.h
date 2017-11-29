@@ -69,8 +69,8 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
 
     virtual TangentVector getSplittingNormal(const ompl::base::State* state,
                                              uint depth) const {
-        checkSetup();
-        return coordinates[lie_split_idx[depth%W_]]->getTangent(state);
+        //checkSetup();
+        return coordinates[lieSplittingIndices[depth%W_]]->getTangent(state);
     }
 
     class OuterBox{
@@ -93,10 +93,10 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
     virtual OuterBoxPtr getOuterBox(const ompl::base::State* center, double size) const=0;
   private:
     uint W_;
-    std::vector<uint> lie_split_idx;
+    std::vector<uint> lieSplittingIndices;
 
     inline void checkSetup() const{
-        BOOST_ASSERT_MSG(lie_split_idx.size()==W_,
+        BOOST_ASSERT_MSG(lieSplittingIndices.size()==W_,
                          "setupManifold() was not called!");
     }
 
@@ -116,12 +116,12 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
         for(auto& c: coordinates){
           W_+=c->getWeight();
           for(uint i=0;i<c->getWeight();i++){
-              lie_split_idx.push_back(ci);
+              lieSplittingIndices.push_back(ci);
           }
           ci++;
         }
       std::cout << "Splitting sequence initialized to: [";
-      for (auto& i:lie_split_idx)
+      for (auto& i:lieSplittingIndices)
           std::cout << i << ", ";
       std::cout << "\b\b];" << std::endl;
     }

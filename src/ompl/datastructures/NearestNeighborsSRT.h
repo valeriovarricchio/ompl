@@ -222,6 +222,7 @@ public:
 
     _T nearest(const _T &data) const{
         EASY_BLOCK("nearest");
+        resetCounters();
         BPQ Q;
         Q.setKlim(1);
         query(data, root, Q);
@@ -230,15 +231,21 @@ public:
 
     void nearestK(const _T &data, std::size_t k,
                   std::vector<_T> &out) const {
+        resetCounters();
         EASY_BLOCK("nearestK");
         BPQ Q;
         Q.setKlim(k);
-        query(data, root, Q);
+        if(k>=size_){
+            query(data->state, root, Q);
+        }else{
+            query(data, root, Q);
+        }
         transcribeQueue(Q,out);
     }
 
     void nearestR(const _T &data, double radius,
                   std::vector<_T> &out) const {
+        resetCounters();
         BPQ Q;
         Q.setRlim(radius);
         query(data, root, Q);
@@ -256,6 +263,12 @@ public:
     }
 
 private:
+    void resetCounters() const{
+        if(nodesVisitedCounter_) *nodesVisitedCounter_ = 0;
+        if(leavesVisitedCounter_) *leavesVisitedCounter_= 0;
+        if(distEvaluationCounter_) *distEvaluationCounter_ = 0;
+    }
+
     void listRecursion(NodePtr top, std::vector<_T>& out) const {
         out.push_back(top->motion);
         if(top->hasChild(0))
@@ -281,9 +294,6 @@ private:
     void query(const _T& data, const NodePtr top, BPQ& Q) const {
         std::vector<ompl::base::State* > ghosts;
         M.ghostPoints(data->state, ghosts);
-        if(nodesVisitedCounter_) *nodesVisitedCounter_ = 0;
-        if(leavesVisitedCounter_) *leavesVisitedCounter_= 0;
-        if(distEvaluationCounter_) *distEvaluationCounter_ = 0;
 
         for(auto& s: ghosts)
         {

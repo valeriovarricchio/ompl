@@ -80,6 +80,21 @@ private:
         }
     };
 
+    struct LateralCoordinate : public Base::PrivilegedCoordinate{
+        unsigned int getWeight() const {
+            return 2;
+        }
+
+        std::string getName() const {
+            return {"lateral"};
+        }
+
+        TangentVector getTangent(const ompl::base::State* center) const {
+            auto x = center->as<StateType>();
+            return {-sin(x->getYaw()), cos(x->getYaw()), 0.0};
+        }
+    };
+
     template<class at, class bt>
     static double dotXY(const at& A, const bt& B) {
         return A[0]*B[0]+A[1]*B[1];
@@ -100,20 +115,6 @@ private:
                 A->as<StateType>()->getY()-B->as<StateType>()->getY()};
     }
 
-    struct LateralCoordinate : public Base::PrivilegedCoordinate{
-        unsigned int getWeight() const {
-            return 2;
-        }
-
-        std::string getName() const {
-            return {"lateral"};
-        }
-
-        TangentVector getTangent(const ompl::base::State* center) const {
-            auto x = center->as<StateType>();
-            return {-sin(x->getYaw()), cos(x->getYaw()), 0.0};
-        }
-    };
 
     double df_(const ompl::base::State* A, const ompl::base::State* B) const{
         return fabs(dotXY(f_.getTangent(A), diffXY(A,B)));
