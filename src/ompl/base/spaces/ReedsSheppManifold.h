@@ -145,13 +145,33 @@ private:
         return sqrt(dxy[0]*dxy[0]+dxy[1]*dxy[1]);
     }
 
+    double thetaRange(srt::Bucket bucket, const double yaw) const{
+        // TODO memoize this!!  (can add extra log N complexity)
+        // however, it affects only the build time, let's postpone it
+        vec2d thetaMinMax({-M_PI, M_PI});
+        for (const auto& node:bucket.nodes){
+            double nodeyaw = node.state->as<StateType>()->getYaw();
+            bool side = yaw>=nodeyaw;
+            if(node.normal[2]==1){
+                bool comp = (thetaMinMax[1-side]-nodeyaw)>0;
+                if(comp!=side){
+                    thetaMinMax[1-side] = nodeyaw;
+                }
+            }
+        }
+        assert(thetaMinMax[1]-thetaMinMax[0]>0 && "WRONG THETA RANGE!");
+        return thetaMinMax[1]-thetaMinMax[0];
+    }
+
     LateralCoordinate l_;
     LongitudinalCoordinate f_;
     HeadingCoordinate h_;
+    bool useTransition;
 
 public:
 
-    ReedsSheppManifold(double rho_): SubRiemannianManifold(rho_)
+    ReedsSheppManifold(double rho_, bool useTransition_=false):
+        SubRiemannianManifold(rho_), useTransition(useTransition_)
     {
         coordinates.push_back(&f_);
         coordinates.push_back(&h_);
@@ -185,6 +205,22 @@ public:
         double tbox = std::max(std::max(tf, th), tl);
         return std::max(tbox, euclideanXY(A,B));
         //return tbox; // only use box bound
+    }
+
+    /* This implements the transition */
+    TangentVector getSplittingNormal(const ompl::base::State* state,
+                                     const srt::Bucket bucket) const {
+        if(useTransition){
+            uint depth = bucket.nodes.size();
+            double thrange = thetaRange(bucket, state->as<StateType>()->getYaw());
+
+            if(thrange>M_PI){
+                // "holonomic regime"
+                return coordinates[depth%3]->getTangent(state);
+            }
+        }
+        // "non-holonomic regime"
+        return Base::getSplittingNormal(state, bucket);
     }
 
     class ReedsSheppOuterBox : public Base::OuterBox

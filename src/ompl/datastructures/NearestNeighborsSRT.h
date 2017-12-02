@@ -48,6 +48,20 @@
 #include <easy/profiler.h>
 namespace ompl {
 
+
+namespace srt{
+
+struct Node{
+    ompl::base::State* state;
+    std::vector<double> normal;
+    bool side;
+};
+
+struct Bucket{
+    std::vector<Node> nodes;
+};
+
+}
 // _T meant to be a pointer to Motion (subclass of RRTStar)
 // ManifoldType meant to be derived from SubRiemannianManifold
 
@@ -75,7 +89,7 @@ class NearestNeighborsSRT: public ompl::NearestNeighbors<_T>
         uint side;
 
         Node(const _T& motion_, const std::vector<double>& normal_):
-             motion(motion_), normal(normal_), depth(0) {}
+             motion(motion_), normal(normal_), depth(0), parent(0) {}
 
         inline bool isLeaf(){
             return !(hasChild(0) || hasChild(1));
@@ -181,7 +195,7 @@ public:
 
     void add(const _T &data){
         if(!root.get()){
-            root = NodePtr(new Node(data, M.getSplittingNormal(data->state,0)));
+            root = NodePtr(new Node(data, M.getSplittingNormal(data->state,{})));
             size_=1;
         }else{
             add(data, root);
@@ -262,6 +276,20 @@ public:
         listRecursion(root, data);
     }
 
+    //
+    srt::Bucket getBucket(NodePtr n){
+        srt::Bucket rsp;
+        rsp.nodes.clear();
+        Node* cur = n.get();
+        while(cur != nullptr && cur->parent != nullptr){
+            rsp.nodes.push_back({cur->motion->state,
+                           cur->normal,
+                           cur->side});
+            cur = cur->parent;
+        }
+        return rsp;
+    }
+
 private:
     void resetCounters() const{
         if(nodesVisitedCounter_) *nodesVisitedCounter_ = 0;
@@ -285,7 +313,7 @@ private:
             add(data, top->children[side]);
         }else{
             NodePtr newnode(new Node(data,
-                 M.getSplittingNormal(data->state, top->depth+1)));
+                 M.getSplittingNormal(data->state, getBucket(top))));
             top->addChild(newnode, side);
             size_++;
         }

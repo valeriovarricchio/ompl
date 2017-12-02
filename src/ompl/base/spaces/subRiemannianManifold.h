@@ -34,7 +34,6 @@
 
 /* Author: Valerio Varricchio */
 
-#include <type_traits>
 
 #ifndef OMPL_BASE_SPACES_SUB_RIEMANNIAN_MANIFOLD_
 #define OMPL_BASE_SPACES_SUB_RIEMANNIAN_MANIFOLD_
@@ -68,8 +67,9 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
                       const ompl::base::State* B) const =0;
 
     virtual TangentVector getSplittingNormal(const ompl::base::State* state,
-                                             uint depth) const {
+                                             const srt::Bucket& bucket) const {
         //checkSetup();
+        uint depth = bucket.nodes.size();
         return coordinates[lieSplittingIndices[depth%W_]]->getTangent(state);
     }
 
