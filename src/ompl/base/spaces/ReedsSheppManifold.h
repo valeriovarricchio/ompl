@@ -101,11 +101,13 @@ private:
     }
 
     static inline double mod2pi(const double& v) {
-        double rsp = fmod(v, 2.0 * M_PI);
-        if (rsp < -M_PI)
-            rsp += 2.0 * M_PI;
-        else if (rsp > M_PI)
-            rsp -= 2.0 * M_PI;
+        constexpr double pi = boost::math::constants::pi<double>();
+        constexpr double twopi = 2.0*pi;
+        double rsp = fmod(v, twopi);
+        if (rsp < -pi)
+            rsp += twopi;
+        else if (rsp > pi)
+            rsp -= twopi;
         return rsp;
     }
 
@@ -135,6 +137,12 @@ private:
     double dh(const ompl::base::State* A, const ompl::base::State* B) const{
         return std::min(fabs(mod2pi(A->as<StateType>()->getYaw()-
                                     B->as<StateType>()->getYaw())), M_PI);
+    }
+
+    double euclideanXY(const ompl::base::State* A,
+                      const ompl::base::State* B) const {
+        vec2d dxy(diffXY(A,B));
+        return sqrt(dxy[0]*dxy[0]+dxy[1]*dxy[1]);
     }
 
     LateralCoordinate l_;
@@ -175,8 +183,8 @@ public:
                       (DL-rho_)+M_PI*rho_/2:
                       acos(1-DL/rho_)*rho_;
         double tbox = std::max(std::max(tf, th), tl);
-        // return std::max(tbox, eh(A,B)); // if you also implement euclidean
-        return tbox;
+        return std::max(tbox, euclideanXY(A,B));
+        //return tbox; // only use box bound
     }
 
     class ReedsSheppOuterBox : public Base::OuterBox
