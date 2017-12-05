@@ -34,6 +34,7 @@
 
 /* Author: Valerio Varricchio */
 
+#include <ompl/datastructures/NearestNeighborsSRT.h>
 
 #ifndef OMPL_BASE_SPACES_SUB_RIEMANNIAN_MANIFOLD_
 #define OMPL_BASE_SPACES_SUB_RIEMANNIAN_MANIFOLD_
@@ -66,12 +67,16 @@ class SubRiemannianManifold : public _T // TODO move out into SubRiemannianManif
     virtual double lowerBound(const ompl::base::State* A,
                       const ompl::base::State* B) const =0;
 
+    virtual bool hasLowerBound() const = 0;
+
     virtual TangentVector getSplittingNormal(const ompl::base::State* state,
                                              const srt::Bucket& bucket) const {
         //checkSetup();
         uint depth = bucket.nodes.size();
         return coordinates[lieSplittingIndices[depth%W_]]->getTangent(state);
     }
+
+    virtual void freeCacheData(void* cacheData) const { } // override if your manifold writes custom cache data in the nn nodes
 
     class OuterBox{
       protected:

@@ -145,33 +145,59 @@ private:
         return sqrt(dxy[0]*dxy[0]+dxy[1]*dxy[1]);
     }
 
-    double thetaRange(srt::Bucket bucket, const double yaw) const{
-        // TODO memoize this!!  (can add extra log N complexity)
-        // however, it affects only the build time, let's postpone it
-        vec2d thetaMinMax({-M_PI, M_PI});
-        for (const auto& node:bucket.nodes){
-            double nodeyaw = node.state->as<StateType>()->getYaw();
+    void reduceRange(const srt::Node& n, const double yaw, vec2d& thetaMinMax) const{
+        if(n.normal[2]==1){
+            double nodeyaw = n.state->as<StateType>()->getYaw();
             bool side = yaw>=nodeyaw;
-            if(node.normal[2]==1){
-                bool comp = (thetaMinMax[1-side]-nodeyaw)>0;
-                if(comp!=side){
-                    thetaMinMax[1-side] = nodeyaw;
-                }
+            bool comp = (thetaMinMax[1-side]-nodeyaw)>0;
+            if(comp!=side){
+                thetaMinMax[1-side] = nodeyaw;
             }
+        }
+    }
+
+    double thetaRange(const srt::Bucket& bucket, const double yaw) const{
+        vec2d thetaMinMax({-M_PI, M_PI});
+        if(useCache_){ // root to leaf
+            auto cur = bucket.nodes.rbegin(); // root
+            while(cur != bucket.nodes.rend() && cur->cached) cur++;
+            if(cur!=bucket.nodes.rbegin()){
+                thetaMinMax=*static_cast<vec2d*>(std::prev(cur)->cached);
+                reduceRange(*std::prev(cur), yaw, thetaMinMax);
+            }
+            while(cur != bucket.nodes.rend()){
+                cur->cached = new vec2d(thetaMinMax);
+                reduceRange(*cur, yaw, thetaMinMax);
+                cur++;
+            }
+        }else{ // leaf to root
+            for (const auto& node:bucket.nodes)
+                reduceRange(node, yaw, thetaMinMax);
         }
         assert(thetaMinMax[1]-thetaMinMax[0]>0 && "WRONG THETA RANGE!");
         return thetaMinMax[1]-thetaMinMax[0];
     }
 
+
     LateralCoordinate l_;
     LongitudinalCoordinate f_;
     HeadingCoordinate h_;
-    bool useTransition;
-
+    const bool useTransition_; // TODO can these be known at compile time? (constexpr)
+    const bool useLowerBound_;
+    const bool useCache_;
+    const double transThreshold_;
 public:
 
-    ReedsSheppManifold(double rho_, bool useTransition_=false):
-        SubRiemannianManifold(rho_), useTransition(useTransition_)
+    ReedsSheppManifold(double rho_,
+                       bool useTransition=true,
+                       bool useLowerBound=true,
+                       bool useCache=true,
+                       double transThreshold = M_PI):
+        SubRiemannianManifold(rho_),
+        useTransition_(useTransition),
+        useLowerBound_(useLowerBound),
+        useCache_(useCache),
+        transThreshold_(transThreshold)
     {
         coordinates.push_back(&f_);
         coordinates.push_back(&h_);
@@ -193,9 +219,13 @@ public:
         return dx*normal[0]+dy*normal[1]+dh*normal[2]>0;
     }
 
+    inline bool hasLowerBound() const{
+        return useLowerBound_;
+    }
+
     double lowerBound(const ompl::base::State* A,
                       const ompl::base::State* B) const {
-        EASY_BLOCK("RS: lowerBound");
+        //EASY_BLOCK("RS: lowerBound");
         double tf = df(A,B);
         double th = dh(A,B)*rho_;
         double DL = dl(A,B);
@@ -209,18 +239,22 @@ public:
 
     /* This implements the transition */
     TangentVector getSplittingNormal(const ompl::base::State* state,
-                                     const srt::Bucket bucket) const {
-        if(useTransition){
+                                     const srt::Bucket& bucket) const {
+        if(useTransition_){
             uint depth = bucket.nodes.size();
             double thrange = thetaRange(bucket, state->as<StateType>()->getYaw());
 
-            if(thrange>M_PI){
+            if(thrange>transThreshold_){
                 // "holonomic regime"
                 return coordinates[depth%3]->getTangent(state);
             }
         }
         // "non-holonomic regime"
         return Base::getSplittingNormal(state, bucket);
+    }
+
+    void freeCacheData(void* cacheData) const{
+        delete static_cast<vec2d*>(cacheData);
     }
 
     class ReedsSheppOuterBox : public Base::OuterBox

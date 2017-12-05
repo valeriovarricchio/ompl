@@ -37,6 +37,11 @@
 #ifndef OMPL_DATASTRUCTURES_NEAREST_NEIGHBORS_SRT_
 #define OMPL_DATASTRUCTURES_NEAREST_NEIGHBORS_SRT_
 
+#define OMPL_SRT_DEBUG 1
+#ifndef OMPL_SRT_DEBUG
+#define OMPL_SRT_DEBUG 0
+#endif
+
 #include <vector>
 #include <functional>
 #include <ompl/base/StateSpace.h>
@@ -48,13 +53,24 @@
 #include <easy/profiler.h>
 namespace ompl {
 
+// TODO try to make this agnostic to the type of data (e.g. this file itself
+// assumes that _T is some class like RRTStar::Motion.
+// Also, the presence of two definition of "Node" is troublesome.
+
+// As said:
+// _T meant to be a pointer to Motion (subclass of RRTStar)
+// ManifoldType meant to be derived from SubRiemannianManifold
 
 namespace srt{
 
-struct Node{
+struct Node{  // node "for others"
+
     ompl::base::State* state;
     std::vector<double> normal;
     bool side;
+
+    void* nodeptr; // TODO hacky, pointer to original node
+    mutable void* cached;  // TODO hacky, pointer to original cache data
 };
 
 struct Bucket{
@@ -62,8 +78,6 @@ struct Bucket{
 };
 
 }
-// _T meant to be a pointer to Motion (subclass of RRTStar)
-// ManifoldType meant to be derived from SubRiemannianManifold
 
 template <typename _T, typename ManifoldType>
 class NearestNeighborsSRT: public ompl::NearestNeighbors<_T>
@@ -74,22 +88,31 @@ class NearestNeighborsSRT: public ompl::NearestNeighbors<_T>
     typedef std::shared_ptr<Node> NodePtr;
 
     const ManifoldType& M;
+
+#if OMPL_SRT_DEBUG
     size_t *distEvaluationCounter_,
            *nodesVisitedCounter_,
-           *leavesVisitedCounter_;
+           *leavesVisitedCounter_,
+           *lowerBoundEvaluationCounter_;
+#endif
 
     // Helper for KDTree structure
-    struct Node
+    class Node
     {
+        const ManifoldType& M_;
+    public:
         _T motion;
         std::vector<double> normal;
         uint depth;
         std::array<NodePtr, 2> children;
         Node* parent;
         uint side;
+        void* cacheData; // custom accessory
 
-        Node(const _T& motion_, const std::vector<double>& normal_):
-             motion(motion_), normal(normal_), depth(0), parent(0) {}
+        Node(const _T& motion_, const std::vector<double>& normal_,
+             const ManifoldType& M):
+                M_(M), motion(motion_), normal(normal_), depth(0), parent(0),
+                cacheData(NULL) {}
 
         inline bool isLeaf(){
             return !(hasChild(0) || hasChild(1));
@@ -104,6 +127,10 @@ class NearestNeighborsSRT: public ompl::NearestNeighbors<_T>
             c->depth = depth+1;
             c->parent = this;
             c->side = side;
+        }
+
+        ~Node(){
+            M_.freeCacheData(cacheData); // destroys cached data
         }
     };
 
@@ -173,6 +200,7 @@ public:
                   " to the corresponding subriemannian geometry.");
     }
 
+#if OMPL_SRT_DEBUG
     void setDistanceEvaluationCounter(size_t* counter){
         distEvaluationCounter_ = counter;
     }
@@ -185,6 +213,11 @@ public:
         leavesVisitedCounter_ = counter;
     }
 
+    void setLowerBoundEvaluationCounter(size_t* counter){
+        lowerBoundEvaluationCounter_ = counter;
+    }
+#endif
+
     bool reportsSortedResults() const {
         return 1;
     }
@@ -195,7 +228,7 @@ public:
 
     void add(const _T &data){
         if(!root.get()){
-            root = NodePtr(new Node(data, M.getSplittingNormal(data->state,{})));
+            root = NodePtr(new Node(data, M.getSplittingNormal(data->state,{}), M));
             size_=1;
         }else{
             add(data, root);
@@ -282,20 +315,22 @@ public:
         rsp.nodes.clear();
         Node* cur = n.get();
         while(cur != nullptr && cur->parent != nullptr){
-            rsp.nodes.push_back({cur->motion->state,
-                           cur->normal,
-                           cur->side});
+            rsp.nodes.push_back({cur->motion->state, cur->normal, cur->side,
+                                 static_cast<void*>(cur), cur->cacheData});
             cur = cur->parent;
         }
         return rsp;
     }
 
 private:
+#if OMPL_SRT_DEBUG
     void resetCounters() const{
         if(nodesVisitedCounter_) *nodesVisitedCounter_ = 0;
         if(leavesVisitedCounter_) *leavesVisitedCounter_= 0;
         if(distEvaluationCounter_) *distEvaluationCounter_ = 0;
+        if(lowerBoundEvaluationCounter_) *lowerBoundEvaluationCounter_ = 0;
     }
+#endif
 
     void listRecursion(NodePtr top, std::vector<_T>& out) const {
         out.push_back(top->motion);
@@ -312,8 +347,14 @@ private:
         if(top->hasChild(side)){
             add(data, top->children[side]);
         }else{
+            srt::Bucket b(getBucket(top));
             NodePtr newnode(new Node(data,
-                 M.getSplittingNormal(data->state, getBucket(top))));
+                 M.getSplittingNormal(data->state, b), M));
+
+            for(const auto& n:b.nodes){ // caches data
+                static_cast<Node*>(n.nodeptr)->cacheData = n.cached;
+            }
+
             top->addChild(newnode, side);
             size_++;
         }
@@ -332,18 +373,36 @@ private:
 
     void query(const ompl::base::State* state, const NodePtr top, BPQ& Q) const {
         //EASY_BLOCK("query");
+#if OMPL_SRT_DEBUG
         if(nodesVisitedCounter_) (*nodesVisitedCounter_)++;
+#endif
         bool side(0);
         if(!top->isLeaf()){
             side = M.inPositiveHalfspace(state, top->motion->state, top->normal);
             if(top->hasChild(side))
                 query(state, top->children[side], Q);
-        }else if(leavesVisitedCounter_) (*leavesVisitedCounter_)++;
-
+        }
+#if OMPL_SRT_DEBUG
+        else if(leavesVisitedCounter_) (*leavesVisitedCounter_)++;
+#endif
         auto Qub = Q.getUpperBound();
-        if(std::isinf(Qub) || M.lowerBound(state,top->motion->state)<Qub){
+
+        bool mustEvaluate = std::isinf(Qub);
+        if(!mustEvaluate){
+            if(M.hasLowerBound()){
+                mustEvaluate = M.lowerBound(state,top->motion->state)<Qub;
+#if OMPL_SRT_DEBUG
+                if(lowerBoundEvaluationCounter_) (*lowerBoundEvaluationCounter_)++;
+#endif
+            }else
+                mustEvaluate = true;
+        }
+
+        if(mustEvaluate){
             Q.insert({M, top->motion, M.distance(state,top->motion->state)});
+#if OMPL_SRT_DEBUG
             if(distEvaluationCounter_) (*distEvaluationCounter_)++;
+#endif
         }
 
         if(top->hasChild(1-side)){
