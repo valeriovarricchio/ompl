@@ -269,7 +269,9 @@ public:
 
     _T nearest(const _T &data) const{
         EASY_BLOCK("nearest");
+#if OMPL_SRT_DEBUG
         resetCounters();
+#endif
         BPQ Q;
         Q.setKlim(1);
         query(data, root, Q);
@@ -278,7 +280,9 @@ public:
 
     void nearestK(const _T &data, std::size_t k,
                   std::vector<_T> &out) const {
+#if OMPL_SRT_DEBUG
         resetCounters();
+#endif
         EASY_BLOCK("nearestK");
         BPQ Q;
         Q.setKlim(k);
@@ -292,7 +296,9 @@ public:
 
     void nearestR(const _T &data, double radius,
                   std::vector<_T> &out) const {
+#if OMPL_SRT_DEBUG
         resetCounters();
+#endif
         BPQ Q;
         Q.setRlim(radius);
         query(data, root, Q);
