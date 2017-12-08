@@ -117,21 +117,16 @@ private:
                 A->as<StateType>()->getY()-B->as<StateType>()->getY()};
     }
 
-
-    double df_(const ompl::base::State* A, const ompl::base::State* B) const{
-        return fabs(dotXY(f_.getTangent(A), diffXY(A,B)));
-    }
-
     double df(const ompl::base::State* A, const ompl::base::State* B) const{
-        return std::max(df_(A,B), df_(B,A));
-    }
-
-    double dl_(const ompl::base::State* A, const ompl::base::State* B) const{
-        return fabs(dotXY(l_.getTangent(A), diffXY(A,B)));
+        vec2d dxy(diffXY(A,B));
+        return std::max(fabs(dotXY(f_.getTangent(A), dxy)),
+                        fabs(dotXY(f_.getTangent(B), dxy)));
     }
 
     double dl(const ompl::base::State* A, const ompl::base::State* B) const{
-        return std::max(dl_(A,B), dl_(B,A));
+        vec2d dxy(diffXY(A,B));
+        return std::max(fabs(dotXY(l_.getTangent(A), dxy)),
+                        fabs(dotXY(l_.getTangent(B), dxy)));
     }
 
     double dh(const ompl::base::State* A, const ompl::base::State* B) const{
