@@ -117,6 +117,12 @@ private:
                 A->as<StateType>()->getY()-B->as<StateType>()->getY()};
     }
 
+    double inline euclideanXY(const ompl::base::State* A,
+                      const ompl::base::State* B) const {
+        vec2d dxy(diffXY(A,B));
+        return sqrt(dxy[0]*dxy[0]+dxy[1]*dxy[1]);
+    }
+
     double df(const ompl::base::State* A, const ompl::base::State* B) const{
         vec2d dxy(diffXY(A,B));
         return std::max(fabs(dotXY(f_.getTangent(A), dxy)),
@@ -132,12 +138,6 @@ private:
     double dh(const ompl::base::State* A, const ompl::base::State* B) const{
         return std::min(fabs(mod2pi(A->as<StateType>()->getYaw()-
                                     B->as<StateType>()->getYaw())), M_PI);
-    }
-
-    double euclideanXY(const ompl::base::State* A,
-                      const ompl::base::State* B) const {
-        vec2d dxy(diffXY(A,B));
-        return sqrt(dxy[0]*dxy[0]+dxy[1]*dxy[1]);
     }
 
     void reduceRange(const srt::Node& n, const double yaw, vec2d& thetaMinMax) const{
@@ -203,14 +203,14 @@ public:
 
     bool inPositiveHalfspace(const ompl::base::State* state,
                              const ompl::base::State* pivot,
-                             const TangentVector normal) const
+                             const TangentVector& normal) const
     {
-        double dx = state->as<StateType>()->getX()-
-                    pivot->as<StateType>()->getX();
-        double dy = state->as<StateType>()->getY()-
-                    pivot->as<StateType>()->getY();
-        double dh = state->as<StateType>()->getYaw()-
-                    pivot->as<StateType>()->getYaw();
+        EASY_BLOCK("srt: inPositiveHalfspace");
+        auto s = state->as<StateType>();
+        auto p = pivot->as<StateType>();
+        double dx = s->getX()-p->getX();
+        double dy = s->getY()-p->getY();
+        double dh = s->getYaw()-p->getYaw();
         return dx*normal[0]+dy*normal[1]+dh*normal[2]>0;
     }
 
@@ -218,9 +218,15 @@ public:
         return useLowerBound_;
     }
 
+    bool needsGhostPoints(const ompl::base::State* q, double dmax) const override {
+        int m = (q->as<StateType>()->getYaw() >0)? -1 : 1;
+        double dthreshold = (M_PI + m*q->as<StateType>()->getYaw())*rho_;
+        return dmax>dthreshold;
+    }
+
     double lowerBound(const ompl::base::State* A,
                       const ompl::base::State* B) const {
-        //EASY_BLOCK("RS: lowerBound");
+        EASY_BLOCK("srt: lowerBound");
         double tf = df(A,B);
         double th = dh(A,B)*rho_;
         double DL = dl(A,B);
@@ -235,13 +241,17 @@ public:
     /* This implements the transition */
     TangentVector getSplittingNormal(const ompl::base::State* state,
                                      const srt::Bucket& bucket) const {
+        EASY_BLOCK("srt: getNormal");
         if(useTransition_){
             uint depth = bucket.nodes.size();
             double thrange = thetaRange(bucket, state->as<StateType>()->getYaw());
 
             if(thrange>transThreshold_){
                 // "holonomic regime"
-                return coordinates[depth%3]->getTangent(state);
+                //return coordinates[depth%3]->getTangent(state);
+                TangentVector rsp({0.0,0.0,0.0});
+                rsp[depth%3] = 1.0;
+                return rsp;
             }
         }
         // "non-holonomic regime"
@@ -280,8 +290,12 @@ public:
         bool intersectsHyperplane(const ompl::base::State* state,
                                   const std::vector<double>& normal) const
         {
+            EASY_BLOCK("srt: ballHyperplane");
             if(std::isinf(size))
                 return true;
+
+            if(size < fabs(dotXY(diffXY(center, state), normal)))
+                return false;
 
             std::vector<double> halfsizes(getOutBoxHalfSides(size));
 
@@ -293,10 +307,7 @@ public:
             BOOST_ASSERT_MSG(normal[2]==0,
                     "Unexpected normal vector for splitting plane");
 
-            vec2d rcenter({center->as<StateType>()->getX()
-                           -state->as<StateType>()->getX(),
-                           center->as<StateType>()->getY()
-                           -state->as<StateType>()->getY()});
+            vec2d rcenter(diffXY(center, state));
 
             TangentVector f(M.f_.getTangent(this->center));
             TangentVector l(M.l_.getTangent(this->center));
@@ -310,7 +321,7 @@ public:
                 a = ((i & 1) << 1)-1;
                 b = (i & 2)-1;
                 vec2d rvertex({rcenter[0]+F[0]*a+L[0]*b,
-                             rcenter[1]+F[1]*a+L[1]*b});
+                               rcenter[1]+F[1]*a+L[1]*b});
                 double dotp = rvertex[0]*normal[0]+rvertex[1]*normal[1];
 
                 if(last_dotp*dotp<0)

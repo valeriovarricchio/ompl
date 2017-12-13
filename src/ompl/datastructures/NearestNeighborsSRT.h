@@ -367,6 +367,7 @@ private:
     }
 
     void query(const _T& data, const NodePtr top, BPQ& Q) const {
+        //query(data->state, root, Q);
         std::vector<ompl::base::State* > ghosts;
         M.ghostPoints(data->state, ghosts);
 
@@ -385,8 +386,12 @@ private:
         bool side(0);
         if(!top->isLeaf()){
             side = M.inPositiveHalfspace(state, top->motion->state, top->normal);
-            if(top->hasChild(side))
+            if(top->hasChild(side)){
                 query(state, top->children[side], Q);
+            }
+#if OMPL_SRT_DEBUG
+             else if(leavesVisitedCounter_) (*leavesVisitedCounter_)++;
+#endif
         }
 #if OMPL_SRT_DEBUG
         else if(leavesVisitedCounter_) (*leavesVisitedCounter_)++;
